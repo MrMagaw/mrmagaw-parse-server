@@ -3,24 +3,50 @@
 
 var express = require('express');
 var ParseServer = require('parse-server').ParseServer;
+var ParseDashboard = require('parse-dashboard');
 var path = require('path');
 
-var databaseUri = process.env.DATABASE_URI || process.env.MONGODB_URI;
+var databaseURI = process.env.DATABASE_URI || process.env.MONGODB_URI;
+var cloud = process.env.CLOUD_CODE_MAIN || __dirname + '/cloud/main.js';
+var appId = process.env.APP_ID || 'myAppId';
+var masterKey = process.env.MASTER_KEY || '';
+var serverURL = process.env.SERVER_URL || 'http://localhost:1337/parse';
+var appName = process.env.APP_NAME || 'myApp';
+var user = process.env.DASH_USER || 'dev';
+var pass = process.env.DASH_PASS;
 
-if (!databaseUri) {
+if (!pass) {
+  console.log('PASSWORD NOT SET. THIS IS A BIG NO NO.');
+  pass = 'I should have set the password.';
+}
+if (!databaseURI) {
   console.log('DATABASE_URI not specified, falling back to localhost.');
+  databaseURI = 'mongodb://localhost:27017/dev';
 }
 
 var api = new ParseServer({
-  databaseURI: databaseUri || 'mongodb://localhost:27017/dev',
-  cloud: process.env.CLOUD_CODE_MAIN || __dirname + '/cloud/main.js',
-  appId: process.env.APP_ID || 'myAppId',
-  masterKey: process.env.MASTER_KEY || '', //Add your master key here. Keep it secret!
-  serverURL: process.env.SERVER_URL || 'http://localhost:1337/parse',  // Don't forget to change to https if needed
+  databaseURI: databaseURI,
+  cloud: cloud,
+  appId: appId,
+  masterKey: masterKey,
+  serverURL: serverURL,
   liveQuery: {
-    classNames: ["SongList"] // List of classes to support for query subscriptions
+    classNames: ["SongList"]
   }
 });
+
+var dashboard = new ParseDashboard({
+  apps: [{
+    serverURL: serverURL,
+    appId: appId,
+    masterKey: masterKey,
+    appName: appName
+  }],
+  users: [{
+    user: user,
+    pass: pass
+  }],
+}, true);
 // Client-keys like the javascript key or the .NET key are not necessary with parse-server
 // If you wish you require them, you can set them as options in the initialization above:
 // javascriptKey, restAPIKey, dotNetKey, clientKey
@@ -31,8 +57,11 @@ var app = express();
 app.use('/public', express.static(path.join(__dirname, '/public')));
 
 // Serve the Parse API on the /parse URL prefix
+// and the Parse dashboard on the /dashboard URL prefix
 var mountPath = process.env.PARSE_MOUNT || '/parse';
+var dashMountPath = process.env.PARSE_DASHBOARD_MOUNT || '/dashboard';
 app.use(mountPath, api);
+app.use(dashMountPath, dashboard);
 
 // Parse Server plays nicely with the rest of your web routes
 app.get('/', function(req, res) {
